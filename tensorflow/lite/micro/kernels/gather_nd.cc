@@ -28,25 +28,27 @@ constexpr int kOutputTensor = 0;
 constexpr int MAX_INDICES_ND = 5;
 
 TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
+  MicroContext* micro_context = GetMicroContext(context);
+
   TF_LITE_ENSURE_EQ(context, NumInputs(node), 2);
   TF_LITE_ENSURE_EQ(context, NumOutputs(node), 1);
 
-  const TfLiteTensor* params;
-  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kParams, &params));
-  const TfLiteTensor* indices;
-  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kIndices, &indices));
-  TfLiteTensor* output;
-  TF_LITE_ENSURE_OK(context,
-                    GetOutputSafe(context, node, kOutputTensor, &output));
+  TfLiteTensor* params = micro_context->AllocateTempInputTensor(node, kParams);
+  TF_LITE_ENSURE(context, params != nullptr);
+  TfLiteTensor* indices =
+      micro_context->AllocateTempInputTensor(node, kIndices);
+  TF_LITE_ENSURE(context, indices != nullptr);
+  TfLiteTensor* output =
+      micro_context->AllocateTempOutputTensor(node, kOutputTensor);
+  TF_LITE_ENSURE(context, output != nullptr);
 
   switch (params->type) {
     case kTfLiteFloat32:
     case kTfLiteInt8:
       break;
     default:
-      TF_LITE_KERNEL_LOG(context,
-                         "Params of type '%s' are not supported by gather_nd.",
-                         TfLiteTypeGetName(params->type));
+      MicroPrintf("Params of type '%s' are not supported by gather_nd.",
+                  TfLiteTypeGetName(params->type));
       return kTfLiteError;
       break;
   }
@@ -54,9 +56,8 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
     case kTfLiteInt32:
       break;
     default:
-      TF_LITE_KERNEL_LOG(context,
-                         "Indices of type '%s' are not supported by gather_nd.",
-                         TfLiteTypeGetName(indices->type));
+      MicroPrintf("Indices of type '%s' are not supported by gather_nd.",
+                  TfLiteTypeGetName(indices->type));
       return kTfLiteError;
   }
 
@@ -64,22 +65,20 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   const int indices_rank = NumDimensions(indices);
   const int indices_nd = SizeOfDimension(indices, indices_rank - 1);
   if (params_rank < 1) {
-    TF_LITE_KERNEL_LOG(context, "Params must be at least a vector.");
+    MicroPrintf("Params must be at least a vector.");
     return kTfLiteError;
   }
   if (indices_rank < 1) {
-    TF_LITE_KERNEL_LOG(context, "Indices must be at least a vector.");
+    MicroPrintf("Indices must be at least a vector.");
     return kTfLiteError;
   }
   if (indices_nd > params_rank) {
-    TF_LITE_KERNEL_LOG(
-        context, "Index innermost dimension length must be <= params rank.");
+    MicroPrintf("Index innermost dimension length must be <= params rank.");
     return kTfLiteError;
   }
   if (indices_nd > MAX_INDICES_ND) {
-    TF_LITE_KERNEL_LOG(context,
-                       "Index innermost dimension length must not exceed %d.",
-                       MAX_INDICES_ND);
+    MicroPrintf("Index innermost dimension length must not exceed %d.",
+                MAX_INDICES_ND);
     return kTfLiteError;
   }
 
@@ -98,6 +97,10 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
     output_shape->data[output_index++] = params->dims->data[i];
   }
   output_shape->size = output_index;
+
+  micro_context->DeallocateTempTfLiteTensor(params);
+  micro_context->DeallocateTempTfLiteTensor(indices);
+  micro_context->DeallocateTempTfLiteTensor(output);
   return kTfLiteOk;
 }
 
@@ -124,7 +127,8 @@ TfLiteStatus GatherNd(const TfLiteEvalTensor* params,
     slice_size *= params->dims->data[i];
   }
 
-  int remain_flat_size = ElementCount(*params->dims);
+  int params_flat_size = ElementCount(*params->dims);
+  int remain_flat_size = params_flat_size;
 
   // Number of elements per dimension
   int dims_to_count[MAX_INDICES_ND];
@@ -140,6 +144,9 @@ TfLiteStatus GatherNd(const TfLiteEvalTensor* params,
       IndicesT index = index_data[offset];
       from_pos += index * dims_to_count[j];
     }
+    if (from_pos < 0 || from_pos + slice_size > params_flat_size) {
+      return kTfLiteError;
+    }
     std::memcpy(output_data + i * slice_size, param_data + from_pos,
                 sizeof(ParamsT) * slice_size);
   }
@@ -151,19 +158,23 @@ TfLiteStatus EvalGatherNd(TfLiteContext* context,
                           const TfLiteEvalTensor* params,
                           const TfLiteEvalTensor* indices,
                           TfLiteEvalTensor* output) {
+  TfLiteStatus status = kTfLiteError;
   switch (params->type) {
     case kTfLiteFloat32:
-      return GatherNd<float, IndicesT>(params, indices, output);
+      status = GatherNd<float, IndicesT>(params, indices, output);
       break;
     case kTfLiteInt8:
-      return GatherNd<int8_t, IndicesT>(params, indices, output);
+      status = GatherNd<int8_t, IndicesT>(params, indices, output);
       break;
     default:
-      TF_LITE_KERNEL_LOG(context,
-                         "Params type '%s' are not supported by gather_nd.",
-                         TfLiteTypeGetName(params->type));
+      MicroPrintf("Params type '%s' are not supported by gather_nd.",
+                  TfLiteTypeGetName(params->type));
       return kTfLiteError;
   }
+  if (status != kTfLiteOk) {
+    MicroPrintf("gather_nd index out of bounds");
+  }
+  return status;
 }
 
 TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
@@ -179,23 +190,15 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
       return EvalGatherNd<int32_t>(context, params, indices, output);
       break;
     default:
-      TF_LITE_KERNEL_LOG(context,
-                         "Indices of type '%s' are not supported by gather_nd.",
-                         TfLiteTypeGetName(indices->type));
+      MicroPrintf("Indices of type '%s' are not supported by gather_nd.",
+                  TfLiteTypeGetName(indices->type));
       return kTfLiteError;
   }
 }
 }  // namespace
 
 TfLiteRegistration Register_GATHER_ND() {
-  return {/*init=*/nullptr,
-          /*free=*/nullptr,
-          /*prepare=*/Prepare,
-          /*invoke=*/Eval,
-          /*profiling_string=*/nullptr,
-          /*builtin_code=*/0,
-          /*custom_name=*/nullptr,
-          /*version=*/0};
+  return tflite::micro::RegisterOp(nullptr, Prepare, Eval);
 }
 
 }  // namespace tflite

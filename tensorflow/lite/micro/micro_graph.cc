@@ -27,7 +27,6 @@ limitations under the License.
 namespace tflite {
 namespace {
 
-#ifndef TF_LITE_STRIP_ERROR_STRINGS
 const char* OpNameFromRegistration(const TfLiteRegistration* registration) {
   if (registration->builtin_code == BuiltinOperator_CUSTOM) {
     return registration->custom_name;
@@ -35,16 +34,17 @@ const char* OpNameFromRegistration(const TfLiteRegistration* registration) {
     return EnumNameBuiltinOperator(BuiltinOperator(registration->builtin_code));
   }
 }
-#endif  // !defined(TF_LITE_STRIP_ERROR_STRINGS)
 
 }  // namespace
 
 MicroGraph::MicroGraph(TfLiteContext* context, const Model* model,
-                       MicroAllocator* allocator)
+                       MicroAllocator* allocator,
+                       MicroResourceVariables* resource_variables)
     : context_(context),
       model_(model),
       allocator_(allocator),
-      current_subgraph_index_(0) {
+      current_subgraph_index_(0),
+      resource_variables_(resource_variables) {
   if (model != nullptr) {
     subgraphs_ = model->subgraphs();
   }
@@ -208,6 +208,9 @@ TfLiteStatus MicroGraph::ResetVariableTensors() {
                buffer_size);
       }
     }
+  }
+  if (resource_variables_ != nullptr) {
+    resource_variables_->ResetAll();
   }
 
   return kTfLiteOk;

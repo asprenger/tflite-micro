@@ -66,28 +66,24 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node, bool is_arg_max) {
         case kTfLiteFloat32:
           TF_LITE_ARG_MIN_MAX(float, int32_t, int32_t);
           break;
-        case kTfLiteUInt8:
-          TF_LITE_ARG_MIN_MAX(uint8_t, int32_t, int32_t);
-          break;
         case kTfLiteInt8:
           TF_LITE_ARG_MIN_MAX(int8_t, int32_t, int32_t);
           break;
         default:
-          TF_LITE_KERNEL_LOG(context,
-                             "Only float32, uint8_t and int8_t are "
-                             "supported currently, got %s.",
-                             TfLiteTypeGetName(input->type));
+          MicroPrintf(
+              "Only float32, uint8_t and int8_t are "
+              "supported currently, got %s.",
+              TfLiteTypeGetName(input->type));
           return kTfLiteError;
       }
     } else {
-      TF_LITE_KERNEL_LOG(context,
-                         "Only int32_t are supported currently, got %s.",
-                         TfLiteTypeGetName(output->type));
+      MicroPrintf("Only int32_t are supported currently, got %s.",
+                  TfLiteTypeGetName(output->type));
       return kTfLiteError;
     }
   } else {
-    TF_LITE_KERNEL_LOG(context, "Only int32_t are supported currently, got %s.",
-                       TfLiteTypeGetName(axis->type));
+    MicroPrintf("Only int32_t are supported currently, got %s.",
+                TfLiteTypeGetName(axis->type));
     return kTfLiteError;
   }
 
@@ -107,25 +103,11 @@ TfLiteStatus ArgMaxEval(TfLiteContext* context, TfLiteNode* node) {
 }  // namespace arg_min_max
 
 TfLiteRegistration Register_ARG_MAX() {
-  return {/*init=*/nullptr,
-          /*free=*/nullptr,
-          /*prepare=*/nullptr,
-          /*invoke=*/arg_min_max::ArgMaxEval,
-          /*profiling_string=*/nullptr,
-          /*builtin_code=*/0,
-          /*custom_name=*/nullptr,
-          /*version=*/0};
+  return tflite::micro::RegisterOp(nullptr, nullptr, arg_min_max::ArgMaxEval);
 }
 
 TfLiteRegistration Register_ARG_MIN() {
-  return {/*init=*/nullptr,
-          /*free=*/nullptr,
-          /*prepare=*/nullptr,
-          /*invoke=*/arg_min_max::ArgMinEval,
-          /*profiling_string=*/nullptr,
-          /*builtin_code=*/0,
-          /*custom_name=*/nullptr,
-          /*version=*/0};
+  return tflite::micro::RegisterOp(nullptr, nullptr, arg_min_max::ArgMinEval);
 }
 
 }  // namespace micro

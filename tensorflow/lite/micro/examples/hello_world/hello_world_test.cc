@@ -16,7 +16,7 @@ limitations under the License.
 #include <math.h>
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/examples/hello_world/model.h"
+#include "tensorflow/lite/micro/examples/hello_world/hello_world_model_data.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/testing/micro_test.h"
@@ -34,7 +34,7 @@ TF_LITE_MICRO_TEST(LoadModelAndPerformInference) {
 
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.
-  const tflite::Model* model = ::tflite::GetModel(g_model);
+  const tflite::Model* model = ::tflite::GetModel(g_hello_world_model_data);
   if (model->version() != TFLITE_SCHEMA_VERSION) {
     TF_LITE_REPORT_ERROR(&micro_error_reporter,
                          "Model provided is schema version %d not equal "
@@ -58,7 +58,7 @@ TF_LITE_MICRO_TEST(LoadModelAndPerformInference) {
   TfLiteTensor* input = interpreter.input(0);
 
   // Make sure the input has the properties we expect
-  TF_LITE_MICRO_EXPECT_NE(nullptr, input);
+  TF_LITE_MICRO_EXPECT(input != nullptr);
   // The property "dims" tells us the tensor's shape. It has one element for
   // each dimension. Our input is a 2D tensor containing 1 element, so "dims"
   // should have size 2.
