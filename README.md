@@ -1,3 +1,27 @@
+# tflite-micro module for Nordic Connect SDK 1.9.1
+
+The `zephyr` branch has been updated to support https://github.com/tensorflow/tflite-micro [54a86ad from Aug 26, 2022]. 
+This version should work with TensorFlow 2.9.2. Unfortunatelly TFLite Micro has no versions or releases!
+
+Installation:
+
+Copy `CMakeLists.txt` to `./zephyr/modules/tflite-micro`
+ 
+Add repository and project to `./nrf/west.yml`:
+
+    remotes:
+        - name: asprenger
+          url-base: https://github.com/asprenger
+    projects:      
+        - name: tflite-micro
+          revision: 8433b114fa0801702c120137d96371b4d8ad363c
+          path: modules/lib/tflite-micro
+          repo-path: tflite-micro
+          remote: asprenger
+
+Run `west update`.
+
+
 <!--ts-->
    * [TensorFlow Lite for Microcontrollers](#tensorflow-lite-for-microcontrollers)
    * [Build Status](#build-status)
